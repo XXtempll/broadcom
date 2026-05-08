@@ -38,7 +38,7 @@ pipewire alsa-utils-config rtkit dbus elogind polkit
 
 echo "--- 5. Установка vxwm ---"
 xbps-install -y base-devel libX11-devel libXft-devel libXinerama-devel git dmenu feh
-git clone https://github.com/v-x-v/vxwm.git /tmp/vxwm
+git clone https://codeberg.org/wh1tepearl/vxwm.git
 cd /tmp/vxwm && make && make install
 cd -
 
