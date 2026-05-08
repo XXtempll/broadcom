@@ -1,83 +1,72 @@
 #!/bin/bash
 
-# 1. Репозитории и софт
-sudo xbps-install -Sy void-repo-nonfree
-sudo xbps-install -Sy base-devel dkms linux-headers broadcom-wl-dkms
+# Проверка на root
+if [ "$EUID" -ne 0 ]; then 
+  echo "Запусти скрипт через sudo: sudo ./install.sh"
+  exit
+fi
 
-# 2. Блэклист конфликтующих драйверов
-sudo tee /etc/modprobe.d/broadcom-wl.conf <<EOF
+echo "--- 1. Настройка репозиториев и обновление ---"
+xbps-install -Sy void-repo-nonfree void-repo-multilib
+xbps-install -Syu
+
+echo "--- 2. Установка ядра и драйверов Wi-Fi (Lenovo G510) ---"
+# linux-headers нужны для сборки драйвера Broadcom
+xbps-install -y dkms linux-headers broadcom-wl-dkms
+
+# Блокируем конфликтующие драйверы Wi-Fi
+cat <<EOF > /etc/modprobe.d/broadcom-wl.conf
 blacklist b43
-blacklist bcma
+blacklist b43legacy
 blacklist ssb
-blacklist brcmsmac
-blacklist brcmfmac
-EOF
-
-# 3. Сборка драйвера (автоматический поиск версии)
-VERSION=$(dkms status | grep broadcom-wl | cut -d',' -f2 | cut -d':' -f1 | tr -d ' ')
-sudo dkms install broadcom-wl/$VERSION
-
-# 4. Активация
-sudo modprobe wl
-echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf
-
-# 5. Проверка
-echo "Скрипт завершен. Проверяю интернет..."
-ping -c 3 google.com#!/bin/bash
-
-echo "🚀 Начинаем полную настройку Void Linux для Lenovo G510..."
-
-# 1. РЕПОЗИТОРИИ И ОБНОВЛЕНИЕ
-echo "📦 Настройка репозиториев..."
-sudo xbps-install -Sy void-repo-nonfree void-repo-multilib void-repo-multilib-nonfree
-sudo xbps-install -Syu
-
-# 2. WI-FI И ДРАЙВЕРЫ (Broadcom + Intel Graphics)
-echo "📶 Установка драйверов Wi-Fi и Видео..."
-sudo xbps-install -y base-devel dkms linux-headers broadcom-wl-dkms \
-    mesa-vulkan-intel mesa-vulkan-intel-32bit vulkan-loader intel-video-accel
-
-# Блэклист конфликтующих драйверов
-sudo tee /etc/modprobe.d/broadcom-wl.conf <<EOF
-blacklist b43
 blacklist bcma
-blacklist ssb
 blacklist brcmsmac
-blacklist brcmfmac
 EOF
 
-# 3. СБОРКА VXWM (из Codeberg)
-echo "🖼️ Установка графики и сборка vxwm..."
-sudo xbps-install -y xorg-server xinit libX11-devel libXft-devel libXinerama-devel git alacritty
-git clone https://codeberg.org/wh1tepearl/vxwm
-cd vxwm && make && sudo make install && cd ..
+echo "--- 3. Установка NetworkManager и настройка DNS (8.8.8.8) ---"
+xbps-install -y NetworkManager
+# Отключаем стандартный dhcpcd, чтобы не конфликтовал с NetworkManager
+touch /etc/resolv.conf
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
+echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# Делаем файл неизменяемым, чтобы система его не переписала (защита DNS)
+chattr +i /etc/resolv.conf
 
-# 4. СОФТ ДЛЯ РАЗРАБОТКИ (Python, Rust, Web)
-echo "💻 Установка стека разработки..."
-sudo xbps-install -y python3 python3-pip nodejs firefox neovim
-# Rust (официальный инсталлер)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-source $HOME/.cargo/env
+echo "--- 4. Графика и Звук (Intel HD 4600) ---"
+xbps-install -y xorg-minimal xinit xterm mesa-dri mesa-vulkan-intel \
+pipewire alsa-utils-config rtkit dbus elogind polkit
 
-# 5. ИГРЫ И ЗВУК (Dota 2 + Pipewire)
-echo "🎮 Подготовка к геймингу..."
-sudo xbps-install -y steam pipewire wireplumber
+echo "--- 5. Установка vxwm ---"
+xbps-install -y base-devel libX11-devel libXft-devel libXinerama-devel git dmenu feh
+git clone https://github.com/v-x-v/vxwm.git /tmp/vxwm
+cd /tmp/vxwm && make && make install
+cd -
 
-# 6. ФИНАЛЬНАЯ НАСТРОЙКА СИСТЕМЫ
-echo "⚙️ Настройка конфигов..."
+echo "--- 6. ПО для разработки (Web) ---"
+xbps-install -y vscode-bin nodejs-lts python3 python3-pip git curl
 
-# DNS Fix
-echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf
+echo "--- 7. Гейминг (Steam + Dota 2) ---"
+# Ставим Steam и 32-битные библиотеки для него
+xbps-install -y steam libgcc-32bit libstdc++-32bit libdrm-32bit MesaLib-32bit
 
-# Создание .xinitrc
-cat <<EOF > ~/.xinitrc
-pipewire &
-wireplumber &
-setxkbmap -layout us,ru -option grp:alt_shift_toggle &
-exec vxwm
-EOF
+echo "--- 8. Включение сервисов ---"
+# В Void сервисы включаются через создание симлинков
+ln -sf /etc/sv/dbus /var/service/
+ln -sf /etc/sv/NetworkManager /var/service/
+ln -sf /etc/sv/elogind /var/service/
+# Отключаем dhcpcd, если он был включен
+rm -f /var/service/dhcpcd
 
-echo "✅ ВСЁ ГОТОВО!"
-echo "1. Перезагрузись: sudo reboot"
-echo "2. После залогинься и пиши: startx"
-echo "3. В vxwm нажми Alt+Enter для запуска терминала."
+echo "--- 9. Финальные штрихи ---"
+# Настройка запуска графики для пользователя
+USER_NAME=$( logname )
+USER_HOME=$(eval echo "~$USER_NAME")
+echo "exec vxwm" > "$USER_HOME/.xinitrc"
+chown $USER_NAME:$USER_NAME "$USER_HOME/.xinitrc"
+
+echo "----------------------------------------------------------"
+echo "УСТАНОВКА ЗАВЕРШЕНА!"
+echo "1. Перезагрузись: reboot"
+echo "2. После перезагрузки введи: nmtui (чтобы подключить Wi-Fi)"
+echo "3. Введи: startx (чтобы запустить vxwm)"
+echo "----------------------------------------------------------"
