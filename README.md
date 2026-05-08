@@ -53,7 +53,7 @@ Bootloader: Обязательно "Yes" на установку в основн
 1. Подготовка
 Bash
 sudo xbps-install -Sy git
-git clone https://github.com/твой_ник/твой_репозиторий
+git clone https://github.com/XXtempll/broadcom
 cd твой_репозиторий
 chmod +x install.sh
 2. Запуск скрипта
