@@ -29,14 +29,15 @@ xbps-install -y NetworkManager
 rm -f /etc/resolv.conf
 echo "nameserver 8.8.8.8" > /etc/resolv.conf
 echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# Защита DNS от перезаписи
 chattr +i /etc/resolv.conf
 
-echo "--- 4. Графический стек, звук и права ---"
+echo "--- 4. Графический стек, звук и права (xauth, xorg) ---"
 xbps-install -y xorg-minimal xinit xauth xorg-server xf86-video-intel \
 mesa-dri mesa-vulkan-intel libgcc-32bit libstdc++-32bit \
 libdrm-32bit MesaLib-32bit pipewire alsa-utils-config rtkit dbus elogind polkit
 
-# Установка SUID бита на Xorg (решает проблему запуска сервера)
+# Установка SUID бита на Xorg (решает проблему Server X)
 chmod u+s /usr/libexec/Xorg
 
 echo "--- 5. Группы пользователя ---"
@@ -45,22 +46,21 @@ for group in video input tty audio wheel storage network; do
     usermod -aG $group $REAL_USER
 done
 
-echo "--- 6. Сборка vxwm (Клонирование в домашнюю директорию) ---"
+echo "--- 6. Сборка vxwm (GitHub в домашнюю директорию) ---"
 xbps-install -y base-devel libX11-devel libXft-devel libXinerama-devel git dmenu xterm feh
 
-# Переходим в домашнюю папку пользователя
+# Клонирование в ~/vxwm
 cd "$USER_HOME"
-# Удаляем старую папку, если она была, и качаем заново
 rm -rf vxwm
-git clone https://codeberg.org/wh1tepearl/vxwm.git
+git clone https://github.com/wh1tepearll/vxwm.git
 chown -R "$REAL_USER":"$REAL_USER" vxwm
 
-# Собираем и устанавливаем
+# Компиляция
 cd vxwm
 make && make install
 cd ..
 
-echo "--- 7. Инструменты разработки и игры ---"
+echo "--- 7. ПО для Web-разработки и Игры ---"
 xbps-install -y vscode-bin nodejs-lts python3 steam
 
 echo "--- 8. Включение сервисов ---"
@@ -75,7 +75,7 @@ chown "$REAL_USER":"$REAL_USER" "$USER_HOME/.xinitrc"
 
 echo "----------------------------------------------------"
 echo "УСТАНОВКА ЗАВЕРШЕНА!"
-echo "Папка vxwm находится в: $USER_HOME/vxwm"
+echo "Исходники vxwm: $USER_HOME/vxwm"
 echo "1. reboot"
 echo "2. startx"
 echo "----------------------------------------------------"
